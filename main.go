@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ckinan/system-monitor.go/internal"
+	"github.com/ckinan/sm.go/internal"
 )
 
 func main() {

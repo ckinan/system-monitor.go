@@ -1,3 +1,3 @@
-module github.com/ckinan/system-monitor.go
+module github.com/ckinan/sm.go
 
 go 1.25.0
