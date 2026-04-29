@@ -1,90 +1,68 @@
 package internal
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
 	"sync"
+
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 type Process struct {
-	Pid     int // process id
-	Ppid    int // parent process id
-	Name    string
-	State   string // process state (R=running, S=sleeping, Z=zombie, etc)
-	Threads int
-	RssKB   int // actual RAM used (in kB)
+	Pid      int // process id
+	Ppid     int // parent process id
+	Name     string
+	Rss      int // bytes
+	Cmdline  string
+	Username string
 }
 
-func readProcess(pid int) (Process, error) {
-	file, err := os.Open(fmt.Sprintf("/proc/%d/status", pid))
+func readProcess(p *process.Process) (Process, error) {
+	name, err := p.Name()
 	if err != nil {
 		return Process{}, err
 	}
-	defer file.Close()
-
-	process := Process{Pid: pid}
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		var fieldErr error
-
-		if strings.HasPrefix(line, "PPid:") {
-			var s string
-			s, fieldErr = extractFieldFromLine(line)
-			if fieldErr == nil {
-				process.Ppid, fieldErr = strconv.Atoi(s)
-			}
-		} else if strings.HasPrefix(line, "Name:") {
-			process.Name, fieldErr = extractFieldFromLine(line)
-		} else if strings.HasPrefix(line, "State:") {
-			process.State, fieldErr = extractFieldFromLine(line)
-		} else if strings.HasPrefix(line, "Threads:") {
-			var s string
-			s, fieldErr = extractFieldFromLine(line)
-			if fieldErr == nil {
-				process.Threads, fieldErr = strconv.Atoi(s)
-			}
-		} else if strings.HasPrefix(line, "VmRSS:") {
-			var s string
-			s, fieldErr = extractFieldFromLine(line)
-			if fieldErr == nil {
-				process.RssKB, fieldErr = strconv.Atoi(s)
-			}
-		}
-		if fieldErr != nil {
-			return Process{}, fieldErr
-		}
+	ppid, err := p.Ppid()
+	if err != nil {
+		return Process{}, err
 	}
-	return process, nil
+	mem, err := p.MemoryInfo()
+	if err != nil {
+		return Process{}, err
+	}
+	// cmdline will error on kernel threads (they do not have cmdline)
+	// so let's not evaluate the errors for them
+	cmdline, _ := p.Cmdline()
+	username, err := p.Username()
+	if err != nil {
+		return Process{}, err
+	}
+	return Process{
+		Pid:      int(p.Pid),
+		Ppid:     int(ppid),
+		Name:     name,
+		Rss:      int(mem.RSS),
+		Cmdline:  cmdline,
+		Username: username,
+	}, nil
 }
 
 func ListProcess() ([]Process, error) {
-	procDirs, err := os.ReadDir("/proc")
+	procs, err := process.Processes()
 	if err != nil {
 		return nil, fmt.Errorf("listing /proc: %w", err)
 	}
 
-	results := make(chan Process, len(procDirs))
+	results := make(chan Process, len(procs))
 	var wg sync.WaitGroup
 
-	for _, entry := range procDirs {
-		pid, err := strconv.Atoi(entry.Name())
-		if err != nil || !entry.IsDir() {
-			continue // skip non-PID entries like "tty", "net", etc.
-		}
+	for _, p := range procs {
 		wg.Add(1)
-		go func(pid int) {
+		go func(p *process.Process) {
 			defer wg.Done()
-			if p, err := readProcess(pid); err == nil {
-				results <- p
-				// errors are silently skipped: a PID may dissapear
-				// ReadDir and Open (process exited): that's normal, not fatal
+			if proc, err := readProcess(p); err == nil {
+				results <- proc
 			}
-		}(pid)
+		}(p)
 
 	}
 

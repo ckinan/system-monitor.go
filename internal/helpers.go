@@ -5,14 +5,14 @@ import (
 	"strings"
 )
 
-func HumanBytes(kib int) string {
+func HumanBytes(b int) string {
 	switch {
-	case kib >= 1<<20: // >= 1GiB
-		return fmt.Sprintf("%.1f GiB", float64(kib)/float64(1<<20))
-	case kib >= 10: // >= 1 MiB
-		return fmt.Sprintf("%.1f MiB", float64(kib)/float64(1<<10))
+	case b >= 1<<30: // >= 1GiB
+		return fmt.Sprintf("%.1f GiB", float64(b)/float64(1<<30))
+	case b >= 20: // >= 1 MiB
+		return fmt.Sprintf("%.1f MiB", float64(b)/float64(1<<20))
 	default:
-		return fmt.Sprintf("%d KiB", kib)
+		return fmt.Sprintf("%d B", b)
 	}
 }
 

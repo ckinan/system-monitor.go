@@ -1,10 +1,7 @@
 package internal
 
 import (
-	"bufio"
-	"os"
-	"strconv"
-	"strings"
+	"github.com/shirou/gopsutil/v4/mem"
 )
 
 type Ram struct {
@@ -14,51 +11,13 @@ type Ram struct {
 }
 
 func GetRam() (Ram, error) {
-	file, err := os.Open("/proc/meminfo")
+	v, err := mem.VirtualMemory()
 	if err != nil {
 		return Ram{}, err
 	}
-	defer file.Close()
-
-	var memTotal, memAvailable string
-	var memTotalInt, memAvailableInt, memUsedInt int
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.HasPrefix(line, "MemTotal:") {
-			memTotal = line
-		} else if strings.HasPrefix(line, "MemAvailable:") {
-			memAvailable = line
-		}
-
-		if memTotal != "" && memAvailable != "" {
-			break
-		}
-	}
-
-	memTotalStr, err := extractFieldFromLine(memTotal)
-	if err != nil {
-		return Ram{}, err
-	}
-	memTotalInt, err = strconv.Atoi(memTotalStr)
-	if err != nil {
-		return Ram{}, err
-	}
-	memAvailableStr, err := extractFieldFromLine(memAvailable)
-	if err != nil {
-		return Ram{}, err
-	}
-	memAvailableInt, err = strconv.Atoi(memAvailableStr)
-	if err != nil {
-		return Ram{}, err
-	}
-	memUsedInt = memTotalInt - memAvailableInt
-
 	return Ram{
-		MemTotal:     memTotalInt,
-		MemAvailable: memAvailableInt,
-		MemUsed:      memUsedInt,
+		MemTotal:     int(v.Total),
+		MemAvailable: int(v.Available),
+		MemUsed:      int(v.Used),
 	}, nil
 }
