@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ckinan/cktop/internal/domain"
@@ -54,6 +55,11 @@ type Model struct {
 	table    table.Model
 	sortBy   SortField
 	sortDesc bool
+	viewport viewport.Model
+	// fields for details view
+	showDetail  bool
+	frozenProc  domain.Process
+	frozenProcs []domain.Process
 }
 
 func New(ch <-chan domain.Snapshot) Model {

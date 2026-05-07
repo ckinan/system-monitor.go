@@ -2,6 +2,7 @@ package gopsutil
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 
@@ -43,6 +44,7 @@ func (g *GopsutilProcessReader) ReadProcesses() ([]domain.Process, error) {
 	for _, p := range g.cache {
 		proc, err := readOne(p)
 		if err != nil {
+			log.Printf("dropped pid=%d err=%v", p.Pid, err)
 			continue
 		}
 		results = append(results, proc)
@@ -70,7 +72,15 @@ func readOne(p *process.Process) (domain.Process, error) {
 	}
 	username, err := p.Username()
 	if err != nil {
-		return domain.Process{}, err
+		uid, _ := p.Uids()
+		if len(uid) > 0 {
+			username = fmt.Sprintf("%d", uid[0])
+		} else {
+			username = "?"
+		}
+		// return domain.Process{}, err
+		// let's fallback to user id, otherwise it would error with: something like:
+		// "2026/05/07 14:04:56 dropped pid=4172 err=user: unknown userid 70"
 	}
 	cpu, err := p.Percent(0)
 	if err != nil {
