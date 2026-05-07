@@ -122,19 +122,31 @@ func buildParents(procs []domain.Process, selected domain.Process) []domain.Proc
 
 func buildChildren(procs []domain.Process) map[int][]int {
 	childrenByPid := make(map[int][]int)
+	seen := make(map[int]bool, len(procs))
 	for _, p := range procs {
+		if seen[p.Pid] {
+			continue // gopsutil can return duplicate PIDs on /proc race; skip
+		}
+		seen[p.Pid] = true
 		childrenByPid[p.Ppid] = append(childrenByPid[p.Ppid], p.Pid)
 	}
 	return childrenByPid
 }
 
-func appendTreeRows(pid int, pByPid map[int]domain.Process, childrenByPid map[int][]int, depth int, rows []table.Row, pids []int) ([]table.Row, []int) {
-	for _, childPid := range childrenByPid[pid] {
+// appendTreeRows recursively builds table rows for the descendants of pid.
+// prefix carries the vertical-bar context from parent levels so connectors line up correctly.
+func appendTreeRows(pid int, pByPid map[int]domain.Process, childrenByPid map[int][]int, prefix string, rows []table.Row, pids []int) ([]table.Row, []int) {
+	children := childrenByPid[pid]
+	for i, childPid := range children {
+		isLast := i == len(children)-1
+		connector, nextPrefix := "├─ ", prefix+"│  "
+		if isLast {
+			connector, nextPrefix = "└─ ", prefix+"   "
+		}
 		p := pByPid[childPid]
-		indent := strings.Repeat("  ", depth)
-		rows = append(rows, table.Row{fmt.Sprintf("%s|- [pid:%d | cpu:%.2f%% | rss:%s] %s", indent, p.Pid, p.CPU, util.HumanBytes(int64(p.Rss)), p.Cmdline)})
+		rows = append(rows, table.Row{fmt.Sprintf("%s%s[pid:%d | cpu:%.2f%% | rss:%s] %s", prefix, connector, p.Pid, p.CPU, util.HumanBytes(int64(p.Rss)), p.Cmdline)})
 		pids = append(pids, p.Pid)
-		rows, pids = appendTreeRows(childPid, pByPid, childrenByPid, depth+1, rows, pids)
+		rows, pids = appendTreeRows(childPid, pByPid, childrenByPid, nextPrefix, rows, pids)
 	}
 	return rows, pids
 }
@@ -150,22 +162,29 @@ func buildTreeRows(procs []domain.Process, selected domain.Process) ([]table.Row
 	var rows []table.Row
 	var pids []int
 
-	// ancestors: root → immediate parent
+	// ancestors: root → immediate parent — always a single chain so └─ is always correct
 	for depth, i := 0, len(parents)-1; i >= 0; i, depth = i-1, depth+1 {
 		p := parents[i]
-		indent := strings.Repeat("  ", depth)
-		rows = append(rows, table.Row{fmt.Sprintf("%s|- [pid:%d | cpu:%.2f%% | rss:%s] %s", indent, p.Pid, p.CPU, util.HumanBytes(int64(p.Rss)), p.Cmdline)})
+		if depth == 0 {
+			rows = append(rows, table.Row{fmt.Sprintf("[pid:%d | cpu:%.2f%% | rss:%s] %s", p.Pid, p.CPU, util.HumanBytes(int64(p.Rss)), p.Cmdline)})
+		} else {
+			rows = append(rows, table.Row{fmt.Sprintf("%s└─ [pid:%d | cpu:%.2f%% | rss:%s] %s", strings.Repeat("   ", depth-1), p.Pid, p.CPU, util.HumanBytes(int64(p.Rss)), p.Cmdline)})
+		}
 		pids = append(pids, p.Pid)
 	}
 
 	// selected process
 	depth := len(parents)
-	indent := strings.Repeat("  ", depth)
-	rows = append(rows, table.Row{fmt.Sprintf("%s|- [pid:%d | cpu:%.2f%% | rss:%s] %s", indent, selected.Pid, selected.CPU, util.HumanBytes(int64(selected.Rss)), selected.Cmdline)})
+	if depth == 0 {
+		rows = append(rows, table.Row{fmt.Sprintf("[pid:%d | cpu:%.2f%% | rss:%s] %s", selected.Pid, selected.CPU, util.HumanBytes(int64(selected.Rss)), selected.Cmdline)})
+	} else {
+		rows = append(rows, table.Row{fmt.Sprintf("%s└─ [pid:%d | cpu:%.2f%% | rss:%s] %s", strings.Repeat("   ", depth-1), selected.Pid, selected.CPU, util.HumanBytes(int64(selected.Rss)), selected.Cmdline)})
+	}
 	pids = append(pids, selected.Pid)
 
-	// children subtree
-	rows, pids = appendTreeRows(selected.Pid, pByPid, childrenByPid, depth+1, rows, pids)
+	// children subtree — prefix is the vertical context below the selected node
+	childPrefix := strings.Repeat("   ", depth)
+	rows, pids = appendTreeRows(selected.Pid, pByPid, childrenByPid, childPrefix, rows, pids)
 
 	return rows, pids
 }
