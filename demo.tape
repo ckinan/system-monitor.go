@@ -74,38 +74,51 @@ Type "cktop"
 Enter
 Sleep 3s
 
-# Sort by CPU (C) - descending by default
+# Sort by CPU descending
 Type "C"
 Sleep 2s
 
-# Toggle CPU sort direction (ascending)
+# Toggle CPU sort to ascending
 Type "C"
 Sleep 2s
 
-# Sort by Memory / RSS (M)
+# Sort by RSS descending
 Type "M"
 Sleep 2s
 
-# Sort by PID (P)
-Type "P"
+# Navigate down to a process with children (e.g. a browser or daemon)
+Down 3
+Sleep 500ms
+Down 3
+Sleep 500ms
+
+# Open detail view - live data, global CPU/Mem at top, process tree below
+Enter
+Sleep 3s
+
+# Watch live updates in the detail view (CPU, RSS refresh every second)
+Sleep 3s
+
+# Navigate down to a child process in the tree
+Down 2
+Sleep 500ms
+Down 2
+Sleep 500ms
+
+# Drill into the child process
+Enter
 Sleep 2s
 
-# Sort by CmdLine (L)
-Type "L"
+# Go back up one level
+Type "q"
+Sleep 1s
+
+# Filter processes in the main view
+Type "/"
+Sleep 500ms
+Type "firefox"
 Sleep 2s
-
-# Navigate down through processes
-Down 5
-Sleep 500ms
-Down 5
-Sleep 500ms
-
-# Navigate back up
-Up 5
-Sleep 500ms
-
-# Sort by CPU again to end on a meaningful view
-Type "C"
+Escape
 Sleep 2s
 
 # Quit
